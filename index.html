@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Revisor de palabras en PDF</title>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 30px;
+      color: #222;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #1f2937;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+
+    textarea, input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-size: 15px;
+    }
+
+    textarea {
+      min-height: 150px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 20px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    button:disabled {
+      background: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .note {
+      background: #ecfdf5;
+      border-left: 5px solid #10b981;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .warning {
+      background: #fffbeb;
+      border-left: 5px solid #f59e0b;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 25px;
+      font-size: 14px;
+    }
+
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #e5e7eb;
+    }
+
+    .ok {
+      color: #047857;
+      font-weight: bold;
+    }
+
+    .review {
+      color: #b45309;
+      font-weight: bold;
+    }
+
+    .bad {
+      color: #b91c1c;
+      font-weight: bold;
+    }
+
+    #estado {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Revisor de palabras con formato espaciado</h1>
+
+    <div class="note">
+      Esta versión funciona directamente en el navegador. El PDF no se sube a un servidor;
+      se analiza dentro del equipo de la persona que usa la página.
+    </div>
+
+    <div class="warning">
+      Importante: funciona mejor con PDFs que tienen texto seleccionable. Si el PDF es una imagen escaneada,
+      esta versión no podrá leerlo correctamente sin OCR.
+    </div>
+
+    <label for="pdfFile">Selecciona el PDF</label>
+    <input type="file" id="pdfFile" accept="application/pdf" />
+
+    <label for="palabras">Palabras a revisar, una por línea</label>
+    <textarea id="palabras" placeholder="responsables&#10;organizacion&#10;indigena&#10;colonia"></textarea>
+
+    <label for="paginaInicial">Número de hoja inicial del libro</label>
+    <input type="number" id="paginaInicial" value="1" min="1" />
+
+    <button id="analizarBtn">Analizar PDF</button>
+    <button id="descargarBtn" disabled>Descargar Word</button>
+
+    <div id="estado"></div>
+
+    <div id="tablaResultados"></div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    let resultadosGlobales = [];
+
+    function limpiarPalabra(palabra) {
+      return palabra.trim().toLowerCase();
+    }
+
+    function escaparRegex(texto) {
+      return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    function crearPatronEspaciado(palabra) {
+      const letras = palabra.split("").map(escaparRegex);
+      return new RegExp("\\b" + letras.join("\\s+") + "\\b", "gi");
+    }
+
+    function crearPatronNormal(palabra) {
+      return new RegExp("\\b" + escaparRegex(palabra) + "\\b", "gi");
+    }
+
+    function obtenerFragmento(texto, inicio, fin, margen = 80) {
+      const a = Math.max(0, inicio - margen);
+      const b = Math.min(texto.length, fin + margen);
+      return texto.substring(a, b).replace(/\s+/g, " ").trim();
+    }
+
+    function buscarEnTextoExtraido(texto, palabra) {
+      const hallazgos = [];
+      const textoLower = texto.toLowerCase();
+
+      const patronEspaciado = crearPatronEspaciado(palabra);
+      const patronNormal = crearPatronNormal(palabra);
+
+      let match;
+
+      while ((match = patronEspaciado.exec(textoLower)) !== null) {
+        hallazgos.push({
+          tipo: "Espacios reales",
+          fragmento: obtenerFragmento(texto, match.index, match.index + match[0].length)
+        });
+      }
+
+      while ((match = patronNormal.exec(textoLower)) !== null) {
+        hallazgos.push({
+          tipo: "Normal",
+          fragmento: obtenerFragmento(texto, match.index, match.index + match[0].length)
+        });
+      }
+
+      return hallazgos;
+    }
+
+    function agruparLineas(items) {
+      const lineas = [];
+
+      items.forEach(item => {
+        const texto = item.str || "";
+        if (!texto.trim()) return;
+
+        const x = item.transform[4];
+        const y = item.transform[5];
+        const fontSize = Math.abs(item.transform[0]) || Math.abs(item.height) || 10;
+        const width = item.width || texto.length * fontSize * 0.5;
+
+        let linea = lineas.find(l => Math.abs(l.y - y) < 3);
+
+        if (!linea) {
+          linea = { y, items: [] };
+          lineas.push(linea);
+        }
+
+        linea.items.push({
+          texto,
+          x,
+          y,
+          width,
+          fontSize
+        });
+      });
+
+      lineas.forEach(linea => {
+        linea.items.sort((a, b) => a.x - b.x);
+      });
+
+      lineas.sort((a, b) => b.y - a.y);
+
+      return lineas;
+    }
+
+    function construirCaracteresDeLinea(linea) {
+      const chars = [];
+
+      linea.items.forEach(item => {
+        const texto = item.texto;
+        const visibles = texto.split("");
+
+        if (visibles.length === 0) return;
+
+        const anchoPromedio = item.width / Math.max(visibles.length, 1);
+
+        visibles.forEach((char, i) => {
+          chars.push({
+            char: char.toLowerCase(),
+            x: item.x + i * anchoPromedio,
+            width: anchoPromedio,
+            fontSize: item.fontSize
+          });
+        });
+      });
+
+      return chars;
+    }
+
+    function detectarTrackingVisual(items, palabra) {
+      const hallazgos = [];
+      const lineas = agruparLineas(items);
+
+      lineas.forEach(linea => {
+        const chars = construirCaracteresDeLinea(linea);
+        const charsSinEspacios = chars.filter(c => c.char.trim() !== "");
+
+        const textoSinEspacios = charsSinEspacios.map(c => c.char).join("");
+
+        let pos = textoSinEspacios.indexOf(palabra);
+
+        while (pos !== -1) {
+          const letras = charsSinEspacios.slice(pos, pos + palabra.length);
+
+          if (letras.length === palabra.length) {
+            const distancias = [];
+
+            for (let i = 0; i < letras.length - 1; i++) {
+              distancias.push(letras[i + 1].x - letras[i].x);
+            }
+
+            if (distancias.length > 0) {
+              const distanciaPromedio =
+                distancias.reduce((a, b) => a + b, 0) / distancias.length;
+
+              const anchoPromedio =
+                letras.reduce((a, b) => a + b.width, 0) / letras.length;
+
+              const fontSizePromedio =
+                letras.reduce((a, b) => a + b.fontSize, 0) / letras.length;
+
+              const posibleTracking =
+                distanciaPromedio > anchoPromedio * 1.65 ||
+                distanciaPromedio > fontSizePromedio * 0.85;
+
+              if (posibleTracking) {
+                hallazgos.push({
+                  tipo: "Espaciado visual / tracking",
+                  fragmento: "Detectado visualmente como palabra con separación entre letras: " + palabra
+                });
+              }
+            }
+          }
+
+          pos = textoSinEspacios.indexOf(palabra, pos + 1);
+        }
+      });
+
+      return hallazgos;
+    }
+
+    async function analizarPDF() {
+      const archivo = document.getElementById("pdfFile").files[0];
+      const palabrasTexto = document.getElementById("palabras").value;
+      const paginaInicial = parseInt(document.getElementById("paginaInicial").value || "1", 10);
+      const estado = document.getElementById("estado");
+      const tablaResultados = document.getElementById("tablaResultados");
+      const descargarBtn = document.getElementById("descargarBtn");
+
+      resultadosGlobales = [];
+      descargarBtn.disabled = true;
+      tablaResultados.innerHTML = "";
+
+      if (!archivo) {
+        estado.textContent = "Selecciona un PDF primero.";
+        return;
+      }
+
+      const palabras = palabrasTexto
+        .split("\n")
+        .map(limpiarPalabra)
+        .filter(p => p.length > 0);
+
+      if (palabras.length === 0) {
+        estado.textContent = "Escribe al menos una palabra.";
+        return;
+      }
+
+      estado.textContent = "Leyendo PDF...";
+
+      const arrayBuffer = await archivo.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      for (const palabra of palabras) {
+        let encontrada = false;
+
+        for (let numPagina = 1; numPagina <= pdf.numPages; numPagina++) {
+          estado.textContent = `Analizando "${palabra}" en página ${numPagina} de ${pdf.numPages}...`;
+
+          const page = await pdf.getPage(numPagina);
+          const textContent = await page.getTextContent();
+
+          const items = textContent.items;
+          const textoPagina = items.map(i => i.str).join(" ");
+
+          const hallazgosTexto = buscarEnTextoExtraido(textoPagina, palabra);
+          const hallazgosTracking = detectarTrackingVisual(items, palabra);
+
+          const hallazgos = [...hallazgosTexto, ...hallazgosTracking];
+
+          if (hallazgos.length > 0) {
+            encontrada = true;
+
+            hallazgos.forEach(h => {
+              let estadoResultado = "";
+
+              if (h.tipo === "Espacios reales") {
+                estadoResultado = "Correcto: aparece con espacios reales";
+              } else if (h.tipo === "Espaciado visual / tracking") {
+                estadoResultado = "Correcto: aparece con espaciado visual";
+              } else if (h.tipo === "Normal") {
+                estadoResultado = "Revisar: aparece normal, sin formato espaciado";
+              } else {
+                estadoResultado = "Revisar";
+              }
+
+              resultadosGlobales.push({
+                palabra,
+                paginaPDF: numPagina,
+                hojaLibro: paginaInicial + numPagina - 1,
+                forma: h.tipo,
+                estado: estadoResultado,
+                fragmento: h.fragmento
+              });
+            });
+          }
+        }
+
+        if (!encontrada) {
+          resultadosGlobales.push({
+            palabra,
+            paginaPDF: "-",
+            hojaLibro: "-",
+            forma: "-",
+            estado: "No encontrada",
+            fragmento: ""
+          });
+        }
+      }
+
+      estado.textContent = "Análisis terminado.";
+      descargarBtn.disabled = false;
+      mostrarTabla(resultadosGlobales);
+    }
+
+    function claseEstado(estado) {
+      if (estado.includes("Correcto")) return "ok";
+      if (estado.includes("Revisar")) return "review";
+      return "bad";
+    }
+
+    function mostrarTabla(resultados) {
+      const contenedor = document.getElementById("tablaResultados");
+
+      let html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Palabra</th>
+              <th>Página PDF</th>
+              <th>Hoja del libro</th>
+              <th>Forma detectada</th>
+              <th>Estado</th>
+              <th>Fragmento</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      resultados.forEach(r => {
+        html += `
+          <tr>
+            <td>${escaparHTML(r.palabra)}</td>
+            <td>${escaparHTML(String(r.paginaPDF))}</td>
+            <td>${escaparHTML(String(r.hojaLibro))}</td>
+            <td>${escaparHTML(r.forma)}</td>
+            <td class="${claseEstado(r.estado)}">${escaparHTML(r.estado)}</td>
+            <td>${escaparHTML(r.fragmento)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+
+      contenedor.innerHTML = html;
+    }
+
+    function escaparHTML(texto) {
+      return texto
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function descargarWord() {
+      const {
+        Document,
+        Packer,
+        Paragraph,
+        Table,
+        TableRow,
+        TableCell,
+        TextRun,
+        WidthType
+      } = docx;
+
+      const filas = [
+        new TableRow({
+          children: [
+            celda("Palabra", true),
+            celda("Página PDF", true),
+            celda("Hoja del libro", true),
+            celda("Forma detectada", true),
+            celda("Estado", true)
+          ]
+        })
+      ];
+
+      resultadosGlobales.forEach(r => {
+        filas.push(
+          new TableRow({
+            children: [
+              celda(r.palabra),
+              celda(String(r.paginaPDF)),
+              celda(String(r.hojaLibro)),
+              celda(r.forma),
+              celda(r.estado)
+            ]
+          })
+        );
+      });
+
+      const contenido = [
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Reporte de revisión de palabras con formato espaciado",
+              bold: true,
+              size: 32
+            })
+          ]
+        }),
+
+        new Paragraph({
+          text: "Este reporte muestra dónde aparecen las palabras buscadas y si fueron detectadas como texto normal, texto con espacios reales o posible espaciado visual entre letras."
+        }),
+
+        new Paragraph({
+          text: ""
+        }),
+
+        new Table({
+          width: {
+            size: 100,
+            type: WidthType.PERCENTAGE
+          },
+          rows: filas
+        }),
+
+        new Paragraph({
+          text: ""
+        }),
+
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: "Fragmentos encontrados",
+              bold: true,
+              size: 28
+            })
+          ]
+        })
+      ];
+
+      resultadosGlobales.forEach(r => {
+        if (r.fragmento) {
+          contenido.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${r.palabra} — Página PDF ${r.paginaPDF} / Hoja ${r.hojaLibro}`,
+                  bold: true
+                })
+              ]
+            })
+          );
+
+          contenido.push(
+            new Paragraph({
+              text: `Forma detectada: ${r.forma}`
+            })
+          );
+
+          contenido.push(
+            new Paragraph({
+              text: `Estado: ${r.estado}`
+            })
+          );
+
+          contenido.push(
+            new Paragraph({
+              text: r.fragmento
+            })
+          );
+
+          contenido.push(
+            new Paragraph({
+              text: ""
+            })
+          );
+        }
+      });
+
+      const doc = new Document({
+        sections: [
+          {
+            children: contenido
+          }
+        ]
+      });
+
+      const blob = await Packer.toBlob(doc);
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "reporte_palabras_espaciadas.docx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function celda(texto, bold = false) {
+      const { TableCell, Paragraph, TextRun } = docx;
+
+      return new TableCell({
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: texto,
+                bold
+              })
+            ]
+          })
+        ]
+      });
+    }
+
+    document.getElementById("analizarBtn").addEventListener("click", analizarPDF);
+    document.getElementById("descargarBtn").addEventListener("click", descargarWord);
+  </script>
+</body>
+</html>
