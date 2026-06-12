@@ -3,160 +3,420 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Revisor de palabras en PDF</title>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 
   <style>
+    :root {
+      --bg-main: #0f172a;
+      --bg-card: #ffffff;
+      --bg-soft: #f8fafc;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --text-main: #0f172a;
+      --text-soft: #64748b;
+      --border: #e2e8f0;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background: #f4f6f8;
       margin: 0;
-      padding: 30px;
-      color: #222;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text-main);
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.35), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.25), transparent 35%),
+        linear-gradient(135deg, #020617 0%, #0f172a 45%, #1e293b 100%);
+      padding: 32px;
     }
 
     .container {
-      max-width: 1000px;
-      margin: auto;
-      background: white;
-      padding: 25px;
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+      max-width: 1120px;
+      margin: 0 auto;
     }
 
-    h1 {
-      margin-top: 0;
-      color: #1f2937;
+    .hero {
+      color: white;
+      margin-bottom: 24px;
+      padding: 20px 4px;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(10px);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 1.05;
+      letter-spacing: -1.5px;
+    }
+
+    .hero p {
+      max-width: 760px;
+      color: #cbd5e1;
+      font-size: 18px;
+      line-height: 1.6;
+      margin-top: 14px;
+    }
+
+    .app-card {
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 24px 28px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 24px;
+    }
+
+    .card-header p {
+      margin: 8px 0 0;
+      color: var(--text-soft);
+      line-height: 1.5;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 0.85fr;
+      gap: 24px;
+      padding: 28px;
+    }
+
+    .panel {
+      background: var(--bg-soft);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+
+    .panel h3 {
+      margin: 0 0 14px;
+      font-size: 18px;
     }
 
     label {
-      font-weight: bold;
+      font-weight: 700;
       display: block;
       margin-top: 18px;
       margin-bottom: 8px;
+      color: #1e293b;
     }
 
-    textarea, input {
+    label:first-of-type {
+      margin-top: 0;
+    }
+
+    textarea,
+    input[type="number"],
+    input[type="file"] {
       width: 100%;
-      box-sizing: border-box;
-      padding: 12px;
-      border-radius: 8px;
+      padding: 13px 14px;
+      border-radius: 12px;
       border: 1px solid #cbd5e1;
+      background: white;
       font-size: 15px;
+      outline: none;
+      transition: 0.2s ease;
     }
 
     textarea {
-      min-height: 150px;
+      min-height: 170px;
       resize: vertical;
     }
 
-    button {
-      margin-top: 20px;
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 18px;
-      font-size: 16px;
-      cursor: pointer;
+    textarea:focus,
+    input[type="number"]:focus,
+    input[type="file"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
     }
 
-    button:hover {
-      background: #1d4ed8;
-    }
-
-    button:disabled {
-      background: #94a3b8;
-      cursor: not-allowed;
+    .note,
+    .warning {
+      padding: 14px 16px;
+      border-radius: 14px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+      font-size: 14px;
     }
 
     .note {
       background: #ecfdf5;
-      border-left: 5px solid #10b981;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 20px;
+      border: 1px solid #bbf7d0;
+      color: #065f46;
     }
 
     .warning {
       background: #fffbeb;
-      border-left: 5px solid #f59e0b;
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 20px;
+      border: 1px solid #fde68a;
+      color: #92400e;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 13px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    #analizarBtn {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.32);
+    }
+
+    #analizarBtn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    #descargarBtn {
+      background: #0f172a;
+      color: white;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
+    }
+
+    #descargarBtn:hover {
+      background: #020617;
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      background: #94a3b8 !important;
+      box-shadow: none !important;
+      transform: none !important;
+      cursor: not-allowed;
+    }
+
+    #estado {
+      margin-top: 18px;
+      padding: 13px 15px;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-weight: 700;
+      display: none;
+    }
+
+    #estado:not(:empty) {
+      display: block;
+    }
+
+    #tablaResultados {
+      margin-top: 26px;
+      padding: 0 28px 28px;
+      overflow-x: auto;
     }
 
     table {
       width: 100%;
-      border-collapse: collapse;
-      margin-top: 25px;
+      border-collapse: separate;
+      border-spacing: 0;
+      min-width: 880px;
       font-size: 14px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
     }
 
-    th, td {
-      border: 1px solid #d1d5db;
-      padding: 8px;
+    th,
+    td {
+      padding: 12px 14px;
       text-align: left;
       vertical-align: top;
+      border-bottom: 1px solid var(--border);
     }
 
     th {
-      background: #e5e7eb;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f8fafc;
+    }
+
+    .ok,
+    .review,
+    .bad {
+      font-weight: 800;
+      border-radius: 999px;
+      display: inline-block;
+      padding: 6px 10px;
+      white-space: nowrap;
     }
 
     .ok {
       color: #047857;
-      font-weight: bold;
+      background: #ecfdf5;
     }
 
     .review {
       color: #b45309;
-      font-weight: bold;
+      background: #fffbeb;
     }
 
     .bad {
       color: #b91c1c;
-      font-weight: bold;
+      background: #fef2f2;
     }
 
-    #estado {
-      margin-top: 15px;
-      font-weight: bold;
+    .footer {
+      color: #94a3b8;
+      text-align: center;
+      margin-top: 22px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      body {
+        padding: 18px;
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+        padding: 20px;
+      }
+
+      .card-header {
+        padding: 22px;
+      }
+
+      #tablaResultados {
+        padding: 0 20px 20px;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
     }
   </style>
 </head>
 
 <body>
   <div class="container">
-    <h1>Revisor de palabras con formato espaciado</h1>
+    <section class="hero">
+      <div class="hero-badge">
+        🔒 Procesamiento privado en navegador
+      </div>
 
-    <div class="note">
-      Esta versión funciona directamente en el navegador. El PDF no se sube a un servidor;
-      se analiza dentro del equipo de la persona que usa la página.
+      <h1>Revisor de palabras en PDF</h1>
+
+      <p>
+        Analiza palabras dentro de un libro en PDF y genera un reporte en Word
+        indicando si aparecen normales, con espacios reales o con posible espaciado visual.
+      </p>
+    </section>
+
+    <main class="app-card">
+      <div class="card-header">
+        <h2>Sube tu PDF y genera el reporte</h2>
+        <p>
+          La revisión se realiza directamente en tu navegador. El archivo no se envía a un servidor.
+        </p>
+      </div>
+
+      <div class="content-grid">
+        <section class="panel">
+          <h3>Archivo y palabras</h3>
+
+          <label for="pdfFile">Selecciona el PDF</label>
+          <input type="file" id="pdfFile" accept="application/pdf" />
+
+          <label for="palabras">Palabras a revisar, una por línea</label>
+          <textarea id="palabras" placeholder="responsables&#10;organizacion&#10;indigena&#10;colonia"></textarea>
+
+          <label for="paginaInicial">Número de hoja inicial del libro</label>
+          <input type="number" id="paginaInicial" value="1" min="1" />
+
+          <div class="actions">
+            <button id="analizarBtn">Analizar PDF</button>
+            <button id="descargarBtn" disabled>Descargar Word</button>
+          </div>
+
+          <div id="estado"></div>
+        </section>
+
+        <aside class="panel">
+          <h3>Privacidad y recomendaciones</h3>
+
+          <div class="note">
+            El PDF se procesa dentro del navegador de la persona que usa la página.
+            No se sube a GitHub, no se manda a un servidor y no se guarda en una base de datos.
+          </div>
+
+          <div class="warning">
+            Recomendado: PDFs menores a 100 MB y con texto seleccionable.
+            Si el PDF es escaneado como imagen, esta versión no podrá leerlo correctamente.
+          </div>
+
+          <div class="warning">
+            La detección de espaciado visual es aproximada. Para resultados importantes,
+            revisa manualmente los casos marcados como “Revisar”.
+          </div>
+        </aside>
+      </div>
+
+      <div id="tablaResultados"></div>
+    </main>
+
+    <div class="footer">
+      Herramienta web estática · Sin carga de archivos a servidor
     </div>
-
-    <div class="warning">
-      Importante: funciona mejor con PDFs que tienen texto seleccionable. Si el PDF es una imagen escaneada,
-      esta versión no podrá leerlo correctamente sin OCR.
-    </div>
-
-    <label for="pdfFile">Selecciona el PDF</label>
-    <input type="file" id="pdfFile" accept="application/pdf" />
-
-    <label for="palabras">Palabras a revisar, una por línea</label>
-    <textarea id="palabras" placeholder="responsables&#10;organizacion&#10;indigena&#10;colonia"></textarea>
-
-    <label for="paginaInicial">Número de hoja inicial del libro</label>
-    <input type="number" id="paginaInicial" value="1" min="1" />
-
-    <button id="analizarBtn">Analizar PDF</button>
-    <button id="descargarBtn" disabled>Descargar Word</button>
-
-    <div id="estado"></div>
-
-    <div id="tablaResultados"></div>
   </div>
 
   <script>
@@ -334,6 +594,7 @@
       const estado = document.getElementById("estado");
       const tablaResultados = document.getElementById("tablaResultados");
       const descargarBtn = document.getElementById("descargarBtn");
+      const analizarBtn = document.getElementById("analizarBtn");
 
       resultadosGlobales = [];
       descargarBtn.disabled = true;
@@ -354,71 +615,79 @@
         return;
       }
 
-      estado.textContent = "Leyendo PDF...";
+      try {
+        analizarBtn.disabled = true;
+        estado.textContent = "Leyendo PDF...";
 
-      const arrayBuffer = await archivo.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const arrayBuffer = await archivo.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-      for (const palabra of palabras) {
-        let encontrada = false;
+        for (const palabra of palabras) {
+          let encontrada = false;
 
-        for (let numPagina = 1; numPagina <= pdf.numPages; numPagina++) {
-          estado.textContent = `Analizando "${palabra}" en página ${numPagina} de ${pdf.numPages}...`;
+          for (let numPagina = 1; numPagina <= pdf.numPages; numPagina++) {
+            estado.textContent = `Analizando "${palabra}" en página ${numPagina} de ${pdf.numPages}...`;
 
-          const page = await pdf.getPage(numPagina);
-          const textContent = await page.getTextContent();
+            const page = await pdf.getPage(numPagina);
+            const textContent = await page.getTextContent();
 
-          const items = textContent.items;
-          const textoPagina = items.map(i => i.str).join(" ");
+            const items = textContent.items;
+            const textoPagina = items.map(i => i.str).join(" ");
 
-          const hallazgosTexto = buscarEnTextoExtraido(textoPagina, palabra);
-          const hallazgosTracking = detectarTrackingVisual(items, palabra);
+            const hallazgosTexto = buscarEnTextoExtraido(textoPagina, palabra);
+            const hallazgosTracking = detectarTrackingVisual(items, palabra);
 
-          const hallazgos = [...hallazgosTexto, ...hallazgosTracking];
+            const hallazgos = [...hallazgosTexto, ...hallazgosTracking];
 
-          if (hallazgos.length > 0) {
-            encontrada = true;
+            if (hallazgos.length > 0) {
+              encontrada = true;
 
-            hallazgos.forEach(h => {
-              let estadoResultado = "";
+              hallazgos.forEach(h => {
+                let estadoResultado = "";
 
-              if (h.tipo === "Espacios reales") {
-                estadoResultado = "Correcto: aparece con espacios reales";
-              } else if (h.tipo === "Espaciado visual / tracking") {
-                estadoResultado = "Correcto: aparece con espaciado visual";
-              } else if (h.tipo === "Normal") {
-                estadoResultado = "Revisar: aparece normal, sin formato espaciado";
-              } else {
-                estadoResultado = "Revisar";
-              }
+                if (h.tipo === "Espacios reales") {
+                  estadoResultado = "Correcto: aparece con espacios reales";
+                } else if (h.tipo === "Espaciado visual / tracking") {
+                  estadoResultado = "Correcto: aparece con espaciado visual";
+                } else if (h.tipo === "Normal") {
+                  estadoResultado = "Revisar: aparece normal, sin formato espaciado";
+                } else {
+                  estadoResultado = "Revisar";
+                }
 
-              resultadosGlobales.push({
-                palabra,
-                paginaPDF: numPagina,
-                hojaLibro: paginaInicial + numPagina - 1,
-                forma: h.tipo,
-                estado: estadoResultado,
-                fragmento: h.fragmento
+                resultadosGlobales.push({
+                  palabra,
+                  paginaPDF: numPagina,
+                  hojaLibro: paginaInicial + numPagina - 1,
+                  forma: h.tipo,
+                  estado: estadoResultado,
+                  fragmento: h.fragmento
+                });
               });
+            }
+          }
+
+          if (!encontrada) {
+            resultadosGlobales.push({
+              palabra,
+              paginaPDF: "-",
+              hojaLibro: "-",
+              forma: "-",
+              estado: "No encontrada",
+              fragmento: ""
             });
           }
         }
 
-        if (!encontrada) {
-          resultadosGlobales.push({
-            palabra,
-            paginaPDF: "-",
-            hojaLibro: "-",
-            forma: "-",
-            estado: "No encontrada",
-            fragmento: ""
-          });
-        }
+        estado.textContent = "Análisis terminado.";
+        descargarBtn.disabled = false;
+        mostrarTabla(resultadosGlobales);
+      } catch (error) {
+        console.error(error);
+        estado.textContent = "Ocurrió un error al analizar el PDF. Revisa que el archivo sea válido y tenga texto seleccionable.";
+      } finally {
+        analizarBtn.disabled = false;
       }
-
-      estado.textContent = "Análisis terminado.";
-      descargarBtn.disabled = false;
-      mostrarTabla(resultadosGlobales);
     }
 
     function claseEstado(estado) {
@@ -452,7 +721,7 @@
             <td>${escaparHTML(String(r.paginaPDF))}</td>
             <td>${escaparHTML(String(r.hojaLibro))}</td>
             <td>${escaparHTML(r.forma)}</td>
-            <td class="${claseEstado(r.estado)}">${escaparHTML(r.estado)}</td>
+            <td><span class="${claseEstado(r.estado)}">${escaparHTML(r.estado)}</span></td>
             <td>${escaparHTML(r.fragmento)}</td>
           </tr>
         `;
